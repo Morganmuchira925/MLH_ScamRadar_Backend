@@ -4,55 +4,47 @@ import 'dotenv/config';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
-// server.js
+
+// 1. IMPROVED CORS CONFIGURATION
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://mlh-scamradar-backend.onrender.com'], // Add your netlify URL here
-  methods: ['GET', 'POST'],
+  // Add your Netlify URL here so the browser allows the connection
+  origin: ['http://localhost:5173', 'https://scamradarke.netlify.app'], 
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+// 2. EXPLICIT PRE-FLIGHT HANDLING
+// This handles the "OPTIONS" check browsers do before sending the image/text
+app.options('*', cors());
+
 app.use(express.json());
 
-// --- KEEP-ALIVE HACK ---
-// This prevents Node from exiting if the event loop feels "empty"
-setInterval(() => {}, 1000); 
-
-// 1. Better Error Catching
-process.on('uncaughtException', (err) => {
-    console.error('❌ CRITICAL ERROR:', err.message);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ UNHANDLED REJECTION:', reason);
-});
-
-// 2. Initialize Gemini
+// Initialize Gemini
 let model;
 try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    // Note: Ensure your API key has access to flash-lite or use "gemini-1.5-flash"
+    model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }); 
     console.log("✅ Gemini Model Loaded.");
 } catch (e) {
     console.error("❌ Gemini Init Failed:", e.message);
 }
 
-// 3. API Endpoint
 app.post("/api/chat", async (req, res) => {
     try {
         const { message, image } = req.body;
-
-        // Construct the parts array correctly for Multimodal input
         let parts = [];
 
-        // 1. Add the text instruction
-        // We add a specific command to read image text if an image exists
+        // Explicit OCR + Security prompt
         const instruction = image 
             ? `OCR INSTRUCTION: Read every piece of text visible in the attached image. 
-               ANALYSIS: Compare that text and the following user message for scams: ${message}`
+               ANALYSIS: Check the image text and this message for scams: ${message}. 
+               Respond in plain text without asterisks.`
             : message;
             
         parts.push({ text: instruction });
 
-        // 2. Add the image part explicitly
         if (image && image.inlineData) {
             parts.push({
                 inlineData: {
@@ -64,21 +56,21 @@ app.post("/api/chat", async (req, res) => {
 
         const result = await model.generateContent({ contents: [{ role: "user", parts }] });
         const response = await result.response;
-        res.json({ reply: response.text() });
+        
+        // Remove asterisks here as well to be safe
+        const cleanText = response.text().replace(/\*/g, '');
+        res.json({ reply: cleanText });
+
     } catch (err) {
         console.error("❌ API Error:", err.message);
-        res.status(500).json({ error: "Analysis failed. Ensure the image is a clear JPG/PNG." });
+        res.status(500).json({ error: "Analysis failed. Ensure the image is clear." });
     }
 });
 
-// 4. Start Server with explicit Error Handling
-const PORT = 5001;
-const server = app.listen(PORT, () => {
+// 3. DYNAMIC PORT BINDING (Fixes Render Deployment)
+// Render sets the PORT environment variable. Locally it defaults to 5001.
+const PORT = process.env.PORT || 5001;
+
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server is active on port ${PORT}`);
-}).on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} is already being used by another program!`);
-    } else {
-        console.error('❌ Server failed to start:', err);
-    }
 });
