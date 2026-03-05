@@ -15,7 +15,7 @@ app.use(cors({
 }));
 
 // 2. The Fix for the PathError
-app.options('(.*)', cors());
+app.options('/:any*', cors());
 
 app.use(express.json());
 
