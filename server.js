@@ -14,9 +14,8 @@ app.use(cors({
   credentials: true
 }));
 
-// 2. EXPLICIT PRE-FLIGHT HANDLING
-// This handles the "OPTIONS" check browsers do before sending the image/text
-app.options('*', cors());
+// 2. The Fix for the PathError
+app.options('(.*)', cors());
 
 app.use(express.json());
 
