@@ -4,7 +4,12 @@ import 'dotenv/config';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
-app.use(cors());
+// server.js
+app.use(cors({
+  origin: ['http://localhost:5173', 'https://mlh-scamradar-backend.onrender.com'], // Add your netlify URL here
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 app.use(express.json());
 
 // --- KEEP-ALIVE HACK ---
